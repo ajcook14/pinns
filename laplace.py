@@ -11,25 +11,37 @@ from matplotlib.ticker import LinearLocator
 class NET(pt.nn.Module):
     def __init__(self):
         super().__init__()
-        self.layer1 = pt.nn.Linear(2, 1)
-        pt.nn.init.ones_(self.layer1.weight)
-        pt.nn.init.zeros_(self.layer1.bias)
+        self.layer1 = pt.nn.Linear(2, 100)
+        self.layer2 = pt.nn.Linear(100, 1)
 
     def forward(self, x):
         x = self.layer1(x)
-        return(F.sigmoid(x)) # need an activation with a second derivative
+        x = F.sigmoid(x)
+        x = self.layer2(x)
+        x = F.sigmoid(x)
+        return(x) # need an activation with a second derivative
 
 N_POINTS = 20
-x = pt.linspace(0., 1., N_POINTS)
-y = pt.linspace(0., 1., N_POINTS)
+lbound = 0.
+ubound = 1.
+x = pt.linspace(lbound, ubound, N_POINTS)
+y = pt.linspace(lbound, ubound, N_POINTS)
 data = pt.cartesian_prod(x, y) # like meshgrid, but gives a vector
 data.requires_grad = True
 
+mask = (
+    (data[:, 0] == lbound) | (data[:, 0] == ubound) |
+    (data[:, 1] == lbound) | (data[:, 1] == ubound)
+)
+
+with pt.no_grad():
+    boundary = data[mask]
+
 model = NET()
-optimizer = pt.optim.SGD(model.parameters())
+optimizer = pt.optim.SGD(model.parameters(), lr=0.1)
 
 print("training...")
-for i in range(10):
+for i in range(500):
     optimizer.zero_grad() # only zeros gradients of model parameters
     u = model(data)
 
@@ -40,8 +52,13 @@ for i in range(10):
 
     laplacian = d2u.sum(dim=1)
 
+    with pt.no_grad():
+        dirichlet = boundary[:, 0]**2 - boundary[:, 1]**2 # real part of z -> z^2
+    
+    u_boundary = model(boundary).flatten()
+
     mse = pt.nn.MSELoss()
-    loss = mse(laplacian, pt.zeros(N_POINTS**2)) # this is the laplace equation
+    loss = mse(laplacian, pt.zeros(N_POINTS**2)) + mse(u_boundary, dirichlet)
     loss.backward() # be aware data.grad changes via the .backward() call
 
     optimizer.step() # only alters the model parameter values

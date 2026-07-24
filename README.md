@@ -1,7 +1,7 @@
 ### Setup:
 
 ```bash
-git clone pinns
+git clone https://github.com/ajcook14/pinns.git
 cd pinns
 python3 -m venv vpinns
 source vpinns/bin/activate
